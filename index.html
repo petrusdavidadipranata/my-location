@@ -2,32 +2,25 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Cek Lokasi Saya</title>
+    <title>Tracking Lokasi Akurat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Leaflet CSS -->
+    <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-        }
-
-        #map {
-            height: 90vh;
-            width: 100%;
-        }
+        body { margin: 0; font-family: Arial; }
+        #map { height: 85vh; }
 
         .controls {
             padding: 10px;
-            background: #f5f5f5;
+            background: #f4f4f4;
             text-align: center;
         }
 
         button {
-            padding: 10px 15px;
-            font-size: 16px;
+            padding: 10px;
+            margin: 5px;
             cursor: pointer;
         }
 
@@ -39,82 +32,86 @@
 <body>
 
 <div class="controls">
-    <button onclick="getLocation()">📍 Ambil Lokasi Saya</button>
+    <button onclick="startTracking()">🎯 Mulai Tracking Akurat</button>
+    <button onclick="stopTracking()">🛑 Stop</button>
     <div id="info"></div>
 </div>
 
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-    let map = L.map('map').setView([0, 0], 2);
-    let marker;
+let map = L.map('map').setView([0,0], 2);
+let marker, circle, watchId;
 
-    // Load tile map
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-    function getLocation() {
-        const info = document.getElementById("info");
+let bestAccuracy = Infinity;
 
-        if (!navigator.geolocation) {
-            info.innerHTML = "❌ Browser tidak mendukung Geolocation";
-            return;
-        }
+function startTracking() {
+    const info = document.getElementById("info");
 
-        info.innerHTML = "⏳ Mengambil lokasi...";
+    if (!navigator.geolocation) {
+        info.innerHTML = "❌ Geolocation tidak didukung";
+        return;
+    }
 
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
+    bestAccuracy = Infinity;
+
+    watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy;
+
+            // Ambil yang paling akurat
+            if (acc < bestAccuracy) {
+                bestAccuracy = acc;
 
                 info.innerHTML = `
-                    ✅ Lokasi ditemukan! <br>
-                    Latitude: ${lat} <br>
-                    Longitude: ${lng} <br>
-                    Akurasi: ±${accuracy} meter
+                    📍 Lokasi Terbaik Ditemukan<br>
+                    Lat: ${lat} <br>
+                    Lng: ${lng} <br>
+                    Akurasi: ±${acc.toFixed(2)} meter
                 `;
 
-                // Set view ke lokasi user
-                map.setView([lat, lng], 16);
+                map.setView([lat, lng], 18);
 
-                // Hapus marker lama
-                if (marker) {
-                    map.removeLayer(marker);
-                }
+                if (marker) map.removeLayer(marker);
+                if (circle) map.removeLayer(circle);
 
-                // Tambah marker baru
                 marker = L.marker([lat, lng]).addTo(map)
-                    .bindPopup("📍 Kamu di sini")
+                    .bindPopup("📍 Lokasi paling akurat")
                     .openPopup();
 
-                // Tambah circle akurasi
-                L.circle([lat, lng], {
-                    radius: accuracy
+                circle = L.circle([lat, lng], {
+                    radius: acc,
                 }).addTo(map);
-            },
-            (error) => {
-                switch(error.code) {
-                    case error.PERMISSION_DENIED:
-                        info.innerHTML = "❌ Izin lokasi ditolak";
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        info.innerHTML = "❌ Lokasi tidak tersedia";
-                        break;
-                    case error.TIMEOUT:
-                        info.innerHTML = "❌ Timeout";
-                        break;
-                    default:
-                        info.innerHTML = "❌ Error tidak diketahui";
-                }
             }
-        );
+
+            console.log("Update:", acc);
+        },
+        (err) => {
+            info.innerHTML = "❌ Error: " + err.message;
+            console.log(err);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+        }
+    );
+}
+
+function stopTracking() {
+    if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        document.getElementById("info").innerHTML += "<br>🛑 Tracking dihentikan";
     }
+}
 </script>
 
 </body>
